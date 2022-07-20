@@ -38,6 +38,8 @@ namespace sshmngr
 
         static void Main(string[] args)
         {
+            Console.Title = "sshmngr";
+
             PrintHome();
 
             while (true)
@@ -54,6 +56,10 @@ namespace sshmngr
                 {
                     mngr.AddNewConnection();
                     PrintHome();
+                }
+                if (input == "exit")
+                {
+                   Environment.Exit(0);
                 }
                 else if (input.StartsWith("del "))
                 {
@@ -76,7 +82,9 @@ namespace sshmngr
                 {
                     if (Int32.TryParse(input[4..], out int i))
                     {
-                        if (!mngr.StartSSHSession(i))
+                        if (mngr.StartSSHSession(i))
+                            PrintHome();
+                        else
                         {
                             ConsoleHelper.WriteToConsoleLine(-2, $"Connection [{i}] does not exist.");
                             ConsoleHelper.ClearConsoleLine(-1);

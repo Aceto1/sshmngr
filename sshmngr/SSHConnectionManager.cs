@@ -29,12 +29,12 @@ namespace sshmngr
 
         public void Save()
         {
-            using var stream = File.OpenWrite(jsonPath);
-
-            JsonSerializer.Serialize(stream, Connections, new JsonSerializerOptions()
+            var serializedCons = JsonSerializer.Serialize(Connections, new JsonSerializerOptions()
             {
                 WriteIndented = true,
             });
+
+            File.WriteAllText(jsonPath, serializedCons);
         }
 
         public void AddNewConnection()
@@ -129,41 +129,25 @@ namespace sshmngr
 
             var con = Connections[i - 1];
 
+            Console.Clear();
+            Console.WriteLine($"Connection: [{con.Name}] - {con}");
+            Console.WriteLine();
+
             var procInfo = new ProcessStartInfo
             {
                 UseShellExecute = false,
 
-                RedirectStandardError = true,
-                RedirectStandardInput = true,
-                RedirectStandardOutput = true,
+                CreateNoWindow = false,
 
-                CreateNoWindow = true,
-
-                FileName = "ssh"
+                FileName = "ssh",
+                Arguments = $"{con}"
             };
-
-            procInfo.Arguments = con.ToString();
 
             // Fires up a new process to run inside this one
             var process = Process.Start(procInfo);
 
-            // Depending on your application you may either prioritize the IO or the exact opposite
-            const ThreadPriority ioPriority = ThreadPriority.Highest;
-            var outputThread = new Thread(outputReader) { Name = "ChildIO Output", Priority = ioPriority };
-            var errorThread =  new Thread(errorReader)  { Name = "ChildIO Error", Priority = ioPriority };
-            var inputThread =  new Thread(inputReader)  { Name = "ChildIO Input", Priority = ioPriority };
-
-            // Set as background threads (will automatically stop when application ends)
-            outputThread.IsBackground = errorThread.IsBackground
-                = inputThread.IsBackground = true;
-
-            // Start the IO threads
-            outputThread.Start(process);
-            errorThread.Start(process);
-            inputThread.Start(process);
-
             // Signal to end the application
-            ManualResetEvent stopApp = new ManualResetEvent(false);
+            var stopApp = new ManualResetEvent(false);
 
             // Enables the exited event and set the stopApp signal on exited
             process.EnableRaisingEvents = true;
@@ -172,51 +156,7 @@ namespace sshmngr
             // Wait for the child app to stop
             stopApp.WaitOne();
 
-            // Write some nice output for now?
-            Console.WriteLine();
-            Console.WriteLine("SSH Session closed.");
-
             return true;
-        }
-
-        /// <summary>
-        /// Continuously copies data from one stream to the other.
-        /// </summary>
-        /// <param name="instream">The input stream.</param>
-        /// <param name="outstream">The output stream.</param>
-        private static void PassThrough(Stream instream, Stream outstream)
-        {
-            byte[] buffer = new byte[4096];
-            while (true)
-            {
-                int len;
-                while ((len = instream.Read(buffer, 0, buffer.Length)) > 0)
-                {
-                    outstream.Write(buffer, 0, len);
-                    outstream.Flush();
-                }
-            }
-        }
-
-        private static void outputReader(object p)
-        {
-            var process = (Process)p;
-            // Pass the standard output of the child to our standard output
-            PassThrough(process.StandardOutput.BaseStream, Console.OpenStandardOutput());
-        }
-
-        private static void errorReader(object p)
-        {
-            var process = (Process)p;
-            // Pass the standard error of the child to our standard error
-            PassThrough(process.StandardError.BaseStream, Console.OpenStandardError());
-        }
-
-        private static void inputReader(object p)
-        {
-            var process = (Process)p;
-            // Pass our standard input into the standard input of the child
-            PassThrough(Console.OpenStandardInput(), process.StandardInput.BaseStream);
         }
     }
 }
